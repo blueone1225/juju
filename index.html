@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Orb Burst - Local Engine vs Online Sync Demo</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        darkbg: '#0b0f19',
+                        panelbg: 'rgba(20, 26, 43, 0.85)',
+                        fire: '#ef4444',
+                        water: '#3b82f6',
+                        earth: '#22c55e',
+                        light: '#eab308',
+                        dark: '#a855f7',
+                        heart: '#ec4899',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0b0f19;
+            color: #f3f4f6;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .glass-panel {
+            background: rgba(20, 26, 43, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glowing-title {
+            text-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+        }
+        /* Custom scrollbar for log box */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.2);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between p-2 sm:p-4 overflow-x-hidden font-sans">
+
+    <!-- Top Navigation Header -->
+    <header class="w-full max-w-4xl flex flex-wrap items-center justify-between gap-2 p-3 glass-panel rounded-2xl mb-2">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-bold text-xl text-white shadow-lg shadow-blue-500/30">
+                🔮
+            </div>
+            <div>
+                <h1 class="font-black text-lg sm:text-xl tracking-wide glowing-title text-white">ORB BURST</h1>
+                <p class="text-xs text-gray-400">Architecture Demo: Local Engine vs Cloud Sync</p>
+            </div>
+        </div>
+
+        <!-- Network Toggle Button -->
+        <div class="flex items-center space-x-3">
+            <button id="network-toggle" onclick="toggleNetwork()" class="relative px-4 py-2 rounded-xl font-semibold text-xs sm:text-sm flex items-center space-x-2 transition-all duration-300 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 shadow-lg shadow-emerald-950">
+                <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span id="status-text">ONLINE Mode</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Game & Engine Visualizer Section -->
+    <main class="w-full max-w-4xl flex flex-col lg:flex-row gap-4 items-center lg:items-start justify-center flex-grow">
+        
+        <!-- Game Canvas Side -->
+        <div class="w-full lg:w-auto flex flex-col items-center">
+            <!-- Game HUD Header -->
+            <div class="w-full max-w-[420px] flex justify-between items-center px-4 py-2 glass-panel rounded-t-2xl border-b-0">
+                <div class="text-center">
+                    <span class="text-[10px] uppercase tracking-wider text-gray-400">Score</span>
+                    <div id="score-val" class="text-xl font-extrabold text-blue-400">0</div>
+                </div>
+                <div class="text-center">
+                    <span class="text-[10px] uppercase tracking-wider text-gray-400">High Score</span>
+                    <div id="highscore-val" class="text-xl font-extrabold text-amber-400">0</div>
+                </div>
+                <div class="text-center">
+                    <span class="text-[10px] uppercase tracking-wider text-gray-400">Combo</span>
+                    <div id="combo-val" class="text-xl font-extrabold text-pink-400">x0</div>
+                </div>
+            </div>
+
+            <!-- Canvas Container -->
+            <div class="relative w-full max-w-[420px] aspect-square glass-panel rounded-b-2xl p-2 flex items-center justify-center shadow-2xl border-t-0">
+                <canvas id="gameCanvas" class="w-full h-full rounded-xl cursor-pointer touch-none"></canvas>
+                
+                <!-- Floating Combo overlay notification -->
+                <div id="floating-combo" class="absolute pointer-events-none text-4xl font-black italic text-yellow-300 drop-shadow-[0_0_10px_rgba(234,179,8,0.8)] opacity-0 transform scale-50 transition-all duration-300">
+                    5 COMBO!
+                </div>
+            </div>
+
+            <!-- Quick Game Controls -->
+            <div class="w-full max-w-[420px] flex justify-between items-center mt-2 px-1 gap-2">
+                <button onclick="resetGameBoard()" class="flex-1 py-2 px-3 glass-panel hover:bg-white/10 rounded-xl text-xs font-medium text-gray-300 transition flex items-center justify-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    Shuffle Board
+                </button>
+                <button onclick="toggleMute()" id="mute-btn" class="py-2 px-4 glass-panel hover:bg-white/10 rounded-xl text-xs font-medium text-gray-300 transition">
+                    🔊 Sound
+                </button>
+            </div>
+        </div>
+
+        <!-- Technical & Concept Console Side -->
+        <div class="w-full lg:flex-1 max-w-[420px] lg:max-w-none flex flex-col gap-3">
+            
+            <!-- Architecture Explanation Card -->
+            <div class="glass-panel p-4 rounded-2xl">
+                <h2 class="text-sm font-bold text-gray-200 flex items-center gap-2 mb-2">
+                    <span class="inline-block w-2 h-2 rounded-full bg-cyan-400"></span>
+                    Architecture Concept
+                </h2>
+                <p class="text-xs text-gray-300 leading-relaxed mb-3">
+                    The core Match-3 engine (input, physics, matching algorithm, cascading graphics, SFX) operates <strong class="text-cyan-300">100% Client-Side at 60 FPS</strong> without network requests. Online status is only required to validate game states and sync save checkpoints.
+                </p>
+                
+                <!-- Performance Stats Grid -->
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="bg-black/40 p-2.5 rounded-xl border border-white/5">
+                        <span class="text-gray-400 text-[10px] block">LOCAL ENGINE ENGINE</span>
+                        <div class="flex items-baseline justify-between mt-1">
+                            <span class="font-bold text-emerald-400" id="local-fps">60 FPS</span>
+                            <span class="text-[10px] text-gray-500">0 ms ping</span>
+                        </div>
+                    </div>
+                    <div class="bg-black/40 p-2.5 rounded-xl border border-white/5">
+                        <span class="text-gray-400 text-[10px] block">PENDING CLOUD SYNCS</span>
+                        <div class="flex items-baseline justify-between mt-1">
+                            <span class="font-bold text-amber-400" id="pending-count">0 items</span>
+                            <span class="text-[10px] text-gray-500" id="sync-status">Idle</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Real-time Synchronization Console Logs -->
+            <div class="glass-panel p-4 rounded-2xl flex-1 flex flex-col min-h-[220px]">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                        <span>📡 Sync Event Log</span>
+                    </h2>
+                    <span class="text-[10px] font-mono text-gray-400" id="sync-queue-badge">Queue: 0</span>
+                </div>
+                <div id="log-console" class="flex-1 bg-black/60 font-mono text-[11px] p-2.5 rounded-xl overflow-y-auto space-y-1.5 border border-white/5 max-h-[200px]">
+                    <div class="text-gray-500">[System] Initializing game engine...</div>
+                    <div class="text-emerald-400">[Network] Online connection established. Auth token verified.</div>
+                </div>
+            </div>
+
+            <!-- Local Cache Status Widget -->
+            <div class="glass-panel p-3 rounded-2xl flex items-center justify-between text-xs">
+                <div class="flex items-center space-x-2">
+                    <span class="text-lg">💾</span>
+                    <div>
+                        <div class="font-semibold text-gray-200">Local Storage Backup</div>
+                        <div class="text-[10px] text-gray-400" id="last-save-time">Last autosave: Never</div>
+                    </div>
+                </div>
+                <button onclick="forceSync()" class="px-3 py-1.5 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/40 text-blue-300 text-xs rounded-lg transition font-medium">
+                    Sync Now
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer Info -->
+    <footer class="w-full max-w-4xl text-center py-2 text-[11px] text-gray-500">
+        Simulated Hybrid Offline/Online Architecture • Built with Canvas 2D & Web Audio API
+    </footer>
+
+    <!-- Game Logic & Network Simulation Scripts -->
+    <script>
+        // ==========================================
+        // 1. GLOBAL STATE & NETWORKING SIMULATION
+        // ==========================================
+        let isOnline = true;
+        let soundEnabled = true;
+        let pendingSyncQueue = [];
+        let highScore = parseInt(localStorage.getItem('orb_burst_highscore') || '0');
+        let currentScore = 0;
+        let currentCombo = 0;
+
+        // Audio Context setup
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+        }
+
+        // Play procedural tone for matches/effects
+        function playTone(freq, duration = 0.1, type = 'sine') {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+
+        function playComboSound(combo) {
+            const baseFreq = 220;
+            const step = Math.min(combo, 12);
+            const freq = baseFreq * Math.pow(1.05946, step * 2);
+            playTone(freq, 0.25, 'triangle');
+        }
+
+        function toggleNetwork() {
+            isOnline = !isOnline;
+            const btn = document.getElementById('network-toggle');
+            const dot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+
+            if (isOnline) {
+                btn.className = "relative px-4 py-2 rounded-xl font-semibold text-xs sm:text-sm flex items-center space-x-2 transition-all duration-300 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 shadow-lg shadow-emerald-950";
+                dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse";
+                statusText.innerText = "ONLINE Mode";
+                addLog('[Network] Connection restored. Processing queued cloud updates...', 'emerald');
+                processPendingSyncs();
+            } else {
+                btn.className = "relative px-4 py-2 rounded-xl font-semibold text-xs sm:text-sm flex items-center space-x-2 transition-all duration-300 bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 shadow-lg shadow-amber-950";
+                dot.className = "w-2.5 h-2.5 rounded-full bg-amber-400";
+                statusText.innerText = "OFFLINE Mode";
+                addLog('[Network] Switched to Offline mode. Local Engine continuing independently.', 'amber');
+            }
+        }
+
+        function toggleMute() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('mute-btn').innerText = soundEnabled ? '🔊 Sound' : '🔇 Muted';
+        }
+
+        function addLog(msg, color = 'gray') {
+            const logConsole = document.getElementById('log-console');
+            const entry = document.createElement('div');
+            
+            let colorClass = 'text-gray-400';
+            if (color === 'emerald') colorClass = 'text-emerald-400';
+            if (color === 'amber') colorClass = 'text-amber-400';
+            if (color === 'blue') colorClass = 'text-blue-400';
+            if (color === 'pink') colorClass = 'text-pink-400';
+
+            const time = new Date().toLocaleTimeString().split(' ')[0];
+            entry.className = colorClass;
+            entry.innerText = `[${time}] ${msg}`;
+            logConsole.appendChild(entry);
+            logConsole.scrollTop = logConsole.scrollHeight;
+        }
+
+        function queueCloudSync(actionType, data) {
+            const payload = {
+                id: Math.random().toString(36).substring(2, 9),
+                action: actionType,
+                data: data,
+                timestamp: Date.now()
+            };
+
+            if (isOnline) {
+                // Simulate fast cloud request
+                setTimeout(() => {
+                    addLog(`[Cloud Sync] ${actionType} validated & saved to remote server.`, 'blue');
+                }, 200);
+            } else {
+                pendingSyncQueue.push(payload);
+                addLog(`[Offline Queue] ${actionType} stored locally (${pendingSyncQueue.length} pending).`, 'amber');
+                updateSyncUI();
+            }
+
+            // Always update local storage for immediate offline safety
+            localStorage.setItem('orb_burst_highscore', highScore.toString());
+            document.getElementById('last-save-time').innerText = `Last saved: ${new Date().toLocaleTimeString()}`;
+        }
+
+        function processPendingSyncs() {
+            if (pendingSyncQueue.length === 0) return;
+
+            document.getElementById('sync-status').innerText = 'Syncing...';
+            addLog(`[Cloud Sync] Syncing ${pendingSyncQueue.length} offline events...`, 'blue');
+
+            let delay = 0;
+            const itemsToSync = [...pendingSyncQueue];
+            pendingSyncQueue = [];
+
+            itemsToSync.forEach((item, idx) => {
+                setTimeout(() => {
+                    addLog(`[Cloud Sync] Flushed item #${item.id} (${item.action})`, 'emerald');
+                    if (idx === itemsToSync.length - 1) {
+                        document.getElementById('sync-status').innerText = 'Idle';
+                        updateSyncUI();
+                    }
+                }, delay += 300);
+            });
+        }
+
+        function forceSync() {
+            if (!isOnline) {
+                addLog('[Cloud Sync] Cannot sync while offline! Please enable ONLINE Mode.', 'amber');
+                return;
+            }
+            if (pendingSyncQueue.length === 0) {
+                addLog('[Cloud Sync] All game states are up to date.', 'blue');
+            } else {
+                processPendingSyncs();
+            }
+        }
+
+        function updateSyncUI() {
+            document.getElementById('pending-count').innerText = `${pendingSyncQueue.length} items`;
+            document.getElementById('sync-queue-badge').innerText = `Queue: ${pendingSyncQueue.length}`;
+        }
+
+        // ==========================================
+        // 2. MATCH-3 GAME ENGINE (LOCAL 60 FPS CANVAS)
+        // ==========================================
+        const GRID_SIZE = 8;
+        const ORB_TYPES = [
+            { id: 0, name: 'Fire', color: '#ef4444', glow: '#fca5a5', icon: '🔥' },
+            { id: 1, name: 'Water', color: '#3b82f6', glow: '#93c5fd', icon: '💧' },
+            { id: 2, name: 'Earth', color: '#22c55e', glow: '#86efac', icon: '🌿' },
+            { id: 3, name: 'Light', color: '#eab308', glow: '#fde047', icon: '⚡' },
+            { id: 4, name: 'Dark', color: '#a855f7', glow: '#d8b4fe', icon: '🌙' },
+            { id: 5, name: 'Heart', color: '#ec4899', glow: '#fbcfe8', icon: '💖' }
+        ];
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let tileSize = 0;
+
+        let grid = []; // 2D array [row][col]
+        let particles = [];
+        let animations = []; // active animations
+        let isProcessing = false;
+
+        // Interaction State
+        let selectedTile = null; // {r, c}
+        let dragStart = null;
+
+        // FPS tracking
+        let lastFrameTime = performance.now();
+        let frameCount = 0;
+        let currentFps = 60;
+
+        class Tile {
+            constructor(r, c, type) {
+                this.r = r;
+                this.c = c;
+                this.type = type;
+                this.x = c; // render x position (fractional)
+                this.y = r; // render y position (fractional)
+                this.scale = 1;
+                this.alpha = 1;
+                this.special = null; // 'bomb', 'rainbow'
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 8;
+                this.vy = (Math.random() - 0.5) * 8;
+                this.radius = Math.random() * 4 + 2;
+                this.color = color;
+                this.life = 1.0;
+                this.decay = Math.random() * 0.03 + 0.02;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.15; // Gravity
+                this.life -= this.decay;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            tileSize = canvas.width / GRID_SIZE;
+        }
+
+        function initBoard() {
+            grid = [];
+            for (let r = 0; r < GRID_SIZE; r++) {
+                grid[r] = [];
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    let type;
+                    // Avoid immediate matches at board creation
+                    do {
+                        type = Math.floor(Math.random() * ORB_TYPES.length);
+                    } while (
+                        (c >= 2 && grid[r][c-1]?.type === type && grid[r][c-2]?.type === type) ||
+                        (r >= 2 && grid[r-1][c]?.type === type && grid[r-2][c]?.type === type)
+                    );
+                    grid[r][c] = new Tile(r, c, type);
+                }
+            }
+            document.getElementById('highscore-val').innerText = highScore;
+        }
+
+        function resetGameBoard() {
+            initBoard();
+            currentScore = 0;
+            currentCombo = 0;
+            updateHUD();
+            addLog('[Engine] Board shuffled locally.', 'pink');
+        }
+
+        function updateHUD() {
+            document.getElementById('score-val').innerText = currentScore;
+            document.getElementById('highscore-val').innerText = highScore;
+            document.getElementById('combo-val').innerText = `x${currentCombo}`;
+        }
+
+        // ==========================================
+        // 3. MATCHING & CASCADE LOGIC
+        // ==========================================
+
+        function checkMatches() {
+            let matched = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(false));
+            let matchFound = false;
+
+            // Horizontal check
+            for (let r = 0; r < GRID_SIZE; r++) {
+                let matchLen = 1;
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (c < GRID_SIZE - 1 && grid[r][c] && grid[r][c+1] && grid[r][c].type === grid[r][c+1].type) {
+                        matchLen++;
+                    } else {
+                        if (matchLen >= 3) {
+                            matchFound = true;
+                            for (let k = c - matchLen + 1; k <= c; k++) {
+                                matched[r][k] = true;
+                            }
+                        }
+                        matchLen = 1;
+                    }
+                }
+            }
+
+            // Vertical check
+            for (let c = 0; c < GRID_SIZE; c++) {
+                let matchLen = 1;
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    if (r < GRID_SIZE - 1 && grid[r][c] && grid[r+1][c] && grid[r][c].type === grid[r+1][c].type) {
+                        matchLen++;
+                    } else {
+                        if (matchLen >= 3) {
+                            matchFound = true;
+                            for (let k = r - matchLen + 1; k <= r; k++) {
+                                matched[k][c] = true;
+                            }
+                        }
+                        matchLen = 1;
+                    }
+                }
+            }
+
+            return { matchFound, matched };
+        }
+
+        async function processTurn() {
+            isProcessing = true;
+            let hasChain = true;
+
+            while (hasChain) {
+                const { matchFound, matched } = checkMatches();
+
+                if (!matchFound) {
+                    hasChain = false;
+                    break;
+                }
+
+                currentCombo++;
+                playComboSound(currentCombo);
+                showFloatingCombo(currentCombo);
+
+                // Calculate score
+                let matchCount = 0;
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        if (matched[r][c]) {
+                            matchCount++;
+                            spawnParticles(c * tileSize + tileSize/2, r * tileSize + tileSize/2, ORB_TYPES[grid[r][c].type].color);
+                        }
+                    }
+                }
+
+                const points = matchCount * 100 * currentCombo;
+                currentScore += points;
+                if (currentScore > highScore) {
+                    highScore = currentScore;
+                    queueCloudSync('NEW_HIGH_SCORE', { score: highScore });
+                }
+                updateHUD();
+
+                // Animate pop
+                await animateMatchPop(matched);
+
+                // Apply gravity & spawn new tiles
+                applyGravity();
+                await animateCascade();
+            }
+
+            // End of turn sequence
+            if (currentCombo > 0) {
+                queueCloudSync('MATCH_TURN_END', { score: currentScore, maxCombo: currentCombo });
+            }
+
+            currentCombo = 0;
+            updateHUD();
+            isProcessing = false;
+        }
+
+        function spawnParticles(cx, cy, color) {
+            for (let i = 0; i < 12; i++) {
+                particles.push(new Particle(cx, cy, color));
+            }
+        }
+
+        function showFloatingCombo(combo) {
+            if (combo < 2) return;
+            const el = document.getElementById('floating-combo');
+            el.innerText = `${combo} COMBO!`;
+            el.style.opacity = '1';
+            el.style.transform = 'scale(1.2) translateY(-10px)';
+
+            setTimeout(() => {
+                el.style.opacity = '0';
+                el.style.transform = 'scale(0.5) translateY(0px)';
+            }, 600);
+        }
+
+        function animateMatchPop(matched) {
+            return new Promise((resolve) => {
+                let duration = 200;
+                let startTime = performance.now();
+
+                function step(now) {
+                    let progress = Math.min(1, (now - startTime) / duration);
+                    for (let r = 0; r < GRID_SIZE; r++) {
+                        for (let c = 0; c < GRID_SIZE; c++) {
+                            if (matched[r][c] && grid[r][c]) {
+                                grid[r][c].scale = 1 - progress;
+                                grid[r][c].alpha = 1 - progress;
+                            }
+                        }
+                    }
+
+                    if (progress < 1) {
+                        requestAnimationFrame(step);
+                    } else {
+                        // Remove matched items
+                        for (let r = 0; r < GRID_SIZE; r++) {
+                            for (let c = 0; c < GRID_SIZE; c++) {
+                                if (matched[r][c]) {
+                                    grid[r][c] = null;
+                                }
+                            }
+                        }
+                        resolve();
+                    }
+                }
+                requestAnimationFrame(step);
+            });
+        }
+
+        function applyGravity() {
+            for (let c = 0; c < GRID_SIZE; c++) {
+                let emptyRow = GRID_SIZE - 1;
+                for (let r = GRID_SIZE - 1; r >= 0; r--) {
+                    if (grid[r][c] !== null) {
+                        if (r !== emptyRow) {
+                            grid[emptyRow][c] = grid[r][c];
+                            grid[emptyRow][c].r = emptyRow;
+                            grid[r][c] = null;
+                        }
+                        emptyRow--;
+                    }
+                }
+
+                // Fill new tiles from top
+                for (let r = emptyRow; r >= 0; r--) {
+                    const type = Math.floor(Math.random() * ORB_TYPES.length);
+                    const tile = new Tile(r, c, type);
+                    tile.y = r - (emptyRow - r + 1); // Start above top border for falling effect
+                    grid[r][c] = tile;
+                }
+            }
+        }
+
+        function animateCascade() {
+            return new Promise((resolve) => {
+                let duration = 250;
+                let startTime = performance.now();
+
+                // Snapshot starting positions
+                let startY = [];
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    startY[r] = [];
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        if (grid[r][c]) {
+                            startY[r][c] = grid[r][c].y;
+                        }
+                    }
+                }
+
+                function step(now) {
+                    let progress = Math.min(1, (now - startTime) / duration);
+                    // Ease out bounce/cubic
+                    let ease = 1 - Math.pow(1 - progress, 3);
+
+                    for (let r = 0; r < GRID_SIZE; r++) {
+                        for (let c = 0; c < GRID_SIZE; c++) {
+                            if (grid[r][c]) {
+                                grid[r][c].y = startY[r][c] + (r - startY[r][c]) * ease;
+                                grid[r][c].x = c;
+                            }
+                        }
+                    }
+
+                    if (progress < 1) {
+                        requestAnimationFrame(step);
+                    } else {
+                        // Ensure perfect alignment
+                        for (let r = 0; r < GRID_SIZE; r++) {
+                            for (let c = 0; c < GRID_SIZE; c++) {
+                                if (grid[r][c]) {
+                                    grid[r][c].y = r;
+                                    grid[r][c].x = c;
+                                }
+                            }
+                        }
+                        resolve();
+                    }
+                }
+                requestAnimationFrame(step);
+            });
+        }
+
+        async function swapTiles(r1, c1, r2, c2) {
+            isProcessing = true;
+            const t1 = grid[r1][c1];
+            const t2 = grid[r2][c2];
+
+            // Animate swap
+            await animateSwap(t1, t2, r1, c1, r2, c2);
+
+            // Swap in grid array
+            grid[r1][c1] = t2;
+            grid[r2][c2] = t1;
+            t1.r = r2; t1.c = c2;
+            t2.r = r1; t2.c = c1;
+
+            // Check if valid match
+            const { matchFound } = checkMatches();
+
+            if (!matchFound) {
+                // Swap back
+                playTone(150, 0.15, 'sawtooth');
+                await animateSwap(t1, t2, r2, c2, r1, c1);
+                grid[r1][c1] = t1;
+                grid[r2][c2] = t2;
+                t1.r = r1; t1.c = c1;
+                t2.r = r2; t2.c = c2;
+                isProcessing = false;
+            } else {
+                playTone(440, 0.1, 'sine');
+                processTurn();
+            }
+        }
+
+        function animateSwap(t1, t2, targetR1, targetC1, targetR2, targetC2) {
+            return new Promise((resolve) => {
+                let duration = 150;
+                let startTime = performance.now();
+                let startX1 = t1.x, startY1 = t1.y;
+                let startX2 = t2.x, startY2 = t2.y;
+
+                function step(now) {
+                    let progress = Math.min(1, (now - startTime) / duration);
+
+                    t1.x = startX1 + (targetC2 - startX1) * progress;
+                    t1.y = startY1 + (targetR2 - startY1) * progress;
+
+                    t2.x = startX2 + (targetC1 - startX2) * progress;
+                    t2.y = startY2 + (targetR1 - startY2) * progress;
+
+                    if (progress < 1) {
+                        requestAnimationFrame(step);
+                    } else {
+                        t1.x = targetC2; t1.y = targetR2;
+                        t2.x = targetC1; t2.y = targetR1;
+                        resolve();
+                    }
+                }
+                requestAnimationFrame(step);
+            });
+        }
+
+        // ==========================================
+        // 4. RENDERING & INTERACTION ENGINE
+        // ==========================================
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid backdrop
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    ctx.fillStyle = (r + c) % 2 === 0 ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.15)';
+                    ctx.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
+                }
+            }
+
+            // Draw selection highlight
+            if (selectedTile) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.fillRect(selectedTile.c * tileSize, selectedTile.r * tileSize, tileSize, tileSize);
+                ctx.strokeStyle = '#60a5fa';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(selectedTile.c * tileSize, selectedTile.r * tileSize, tileSize, tileSize);
+            }
+
+            // Draw tiles
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const tile = grid[r][c];
+                    if (tile) {
+                        drawOrb(tile);
+                    }
+                }
+            }
+
+            // Draw & Update Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.update();
+                p.draw(ctx);
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            // FPS Calculation
+            const now = performance.now();
+            frameCount++;
+            if (now - lastFrameTime >= 1000) {
+                currentFps = frameCount;
+                frameCount = 0;
+                lastFrameTime = now;
+                document.getElementById('local-fps').innerText = `${currentFps} FPS`;
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        function drawOrb(tile) {
+            const orbDef = ORB_TYPES[tile.type];
+            const cx = (tile.x + 0.5) * tileSize;
+            const cy = (tile.y + 0.5) * tileSize;
+            const radius = (tileSize * 0.38) * tile.scale;
+
+            if (radius <= 0) return;
+
+            ctx.save();
+            ctx.globalAlpha = tile.alpha;
+
+            // Radial gradient glow
+            const grad = ctx.createRadialGradient(cx - radius * 0.2, cy - radius * 0.2, radius * 0.1, cx, cy, radius);
+            grad.addColorStop(0, orbDef.glow);
+            grad.addColorStop(0.8, orbDef.color);
+            grad.addColorStop(1, '#000000');
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            ctx.fillStyle = grad;
+            ctx.shadowColor = orbDef.color;
+            ctx.shadowBlur = 12;
+            ctx.fill();
+
+            // Specular reflection highlight
+            ctx.beginPath();
+            ctx.arc(cx - radius * 0.3, cy - radius * 0.3, radius * 0.25, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+            ctx.shadowBlur = 0;
+            ctx.fill();
+
+            // Inner Icon / Symbol
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `${Math.floor(tileSize * 0.32)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(orbDef.icon, cx, cy + 1);
+
+            ctx.restore();
+        }
+
+        // Mouse & Touch Input Handlers
+        function getCanvasCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+
+        function handlePointerDown(e) {
+            if (isProcessing) return;
+            const coords = getCanvasCoords(e);
+            const c = Math.floor(coords.x / tileSize);
+            const r = Math.floor(coords.y / tileSize);
+
+            if (r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE) {
+                if (!selectedTile) {
+                    selectedTile = { r, c };
+                    dragStart = { x: coords.x, y: coords.y };
+                } else {
+                    // Clicked second tile directly
+                    const dr = Math.abs(selectedTile.r - r);
+                    const dc = Math.abs(selectedTile.c - c);
+                    if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
+                        const prev = selectedTile;
+                        selectedTile = null;
+                        swapTiles(prev.r, prev.c, r, c);
+                    } else {
+                        selectedTile = { r, c };
+                        dragStart = { x: coords.x, y: coords.y };
+                    }
+                }
+            }
+        }
+
+        function handlePointerMove(e) {
+            if (isProcessing || !selectedTile || !dragStart) return;
+            const coords = getCanvasCoords(e);
+            const dx = coords.x - dragStart.x;
+            const dy = coords.y - dragStart.y;
+            const threshold = tileSize * 0.4;
+
+            if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
+                let targetR = selectedTile.r;
+                let targetC = selectedTile.c;
+
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    targetC += dx > 0 ? 1 : -1;
+                } else {
+                    targetR += dy > 0 ? 1 : -1;
+                }
+
+                if (targetR >= 0 && targetR < GRID_SIZE && targetC >= 0 && targetC < GRID_SIZE) {
+                    const prev = selectedTile;
+                    selectedTile = null;
+                    dragStart = null;
+                    swapTiles(prev.r, prev.c, targetR, targetC);
+                }
+            }
+        }
+
+        function handlePointerUp() {
+            dragStart = null;
+        }
+
+        // Attach listeners
+        canvas.addEventListener('mousedown', handlePointerDown);
+        canvas.addEventListener('mousemove', handlePointerMove);
+        window.addEventListener('mouseup', handlePointerUp);
+
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handlePointerDown(e); }, { passive: false });
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handlePointerMove(e); }, { passive: false });
+        canvas.addEventListener('touchend', handlePointerUp);
+
+        window.addEventListener('resize', resizeCanvas);
+
+        // ==========================================
+        // 5. INITIALIZATION
+        // ==========================================
+        window.onload = function() {
+            resizeCanvas();
+            initBoard();
+            render();
+            addLog('[System] Canvas engine running locally at 60 FPS.', 'emerald');
+        };
+    </script>
+</body>
+</html>
